@@ -4,17 +4,13 @@ namespace AppBundle\Controller;
 
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Serializer\Encoder\JsonEncoder;
-use Symfony\Component\Serializer\Normalizer\GetSetMethodNormalizer;
-use Symfony\Component\Serializer\Serializer;
+use Symfony\Component\Validator\Constraints as Assert;
 
 class DefaultController extends Controller
 {
-    /**
-     * @Route("/", name="homepage")
-     */
+
     public function indexAction(Request $request)
     {
         // replace this example code with whatever you need
@@ -23,28 +19,53 @@ class DefaultController extends Controller
         ]);
     }
 
-    /**
-     * @Route("/pruebas", name="pruebas")
-     */
-    public function pruebasAction(Request $request)
+    public function loginAction(Request $request)
     {
-        $em = $this->getDoctrine()->getManager();
-        $users = $em->getRepository('BackendBundle:User')->findAll();
-        return $this->json($users);
+        $helpers = $this->get("app.helpers");
+        $jwt_auth = $this->get("app.jwt_auth");
+
+        $json = $request->get('json', null);
+
+        if ($json != null) {
+            $params = json_decode($json);
+
+            $email  = (isset($params->email)) ? $params->email : null;
+            $password = (isset($params->password)) ? $params->password : null;
+            $getHash = (isset($params->getHash)) ? $params->getHash : null;
+
+            $emailConstraint = new Assert\Email();
+            $emailConstraint->message = "This email is not valid";
+            $validator_email = $this->get("validator")->validate($email, $emailConstraint);
+
+            if (count($validator_email) == 0 && $password != null) {
+                if ($getHash == null) {
+                    $singIn = $jwt_auth->singnin($email, $password);
+                } else {
+                    $singIn = $jwt_auth->singnin($email, $password, true);
+                }
+                
+                return new JsonResponse($singIn);
+            } else {
+                return $helpers->json([
+                    'status' => 'error',
+                    'data' => 'login not valid'
+                ]);
+            }
+
+        } else {
+            return $helpers->json([
+                'status' => 'error',
+                'data' => 'Send json with post'
+            ]);
+        }
     }
 
-    public function json($data)
+
+    public function pruebasAction(Request $request)
     {
-        $normalizers = array(new GetSetMethodNormalizer());
-        $encoders = array("json" => new JsonEncoder());
-
-        $serializer = new Serializer($normalizers, $encoders);
-        $json = $serializer->serialize($data, 'json');
-
-        $response = new Response();
-        $response->setContent($json);
-        $response->headers->set("Content-Type", "application/json");
-
-        return $response;
+        $helpers = $this->get("app.helpers");
+        $em = $this->getDoctrine()->getManager();
+        $users = $em->getRepository('BackendBundle:User')->findAll();
+        return $helpers->json($users);
     }
 }
